@@ -56,11 +56,13 @@ app.post("/convert", async (req, res) => {
     stderr += chunk.toString();
   });
 
+  let timedOut = false;
   const killTimer = setTimeout(() => {
+    timedOut = true;
     child.kill("SIGKILL");
   }, YT_DLP_TIMEOUT_MS);
 
-  child.on("close", async (code) => {
+  child.on("close", async (code, signal) => {
     clearTimeout(killTimer);
 
     if (res.headersSent) {
@@ -69,8 +71,20 @@ app.post("/convert", async (req, res) => {
 
     if (code !== 0) {
       await cleanup();
-      console.error("yt-dlp falhou:", stderr.slice(-2000));
-      return res.status(502).json({ error: "falha ao converter o vídeo" });
+      const lastLines = stderr
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .slice(-5)
+        .join(" | ")
+        .slice(0, 500);
+      const reason = timedOut
+        ? `timeout de ${YT_DLP_TIMEOUT_MS / 1000}s excedido`
+        : `código de saída ${code}${signal ? ` (sinal ${signal})` : ""}`;
+      console.error(`yt-dlp falhou [${reason}] url=${url}\n${stderr.slice(-2000)}`);
+      return res.status(502).json({
+        error: `yt-dlp falhou (${reason})${lastLines ? `: ${lastLines}` : ""}`,
+      });
     }
 
     try {
@@ -78,7 +92,10 @@ app.post("/convert", async (req, res) => {
       const mp3File = files.find((f) => f.endsWith(".mp3"));
       if (!mp3File) {
         await cleanup();
-        return res.status(502).json({ error: "mp3 não gerado" });
+        console.error(`mp3 não encontrado em ${tmpDir}, arquivos gerados: ${files.join(", ") || "(nenhum)"}`);
+        return res.status(502).json({
+          error: `yt-dlp rodou mas não gerou mp3 (arquivos: ${files.join(", ") || "nenhum"})`,
+        });
       }
 
       const filePath = path.join(tmpDir, mp3File);
@@ -93,22 +110,33 @@ app.post("/convert", async (req, res) => {
       const stream = fsSync.createReadStream(filePath);
       stream.pipe(res);
       stream.on("close", cleanup);
-      stream.on("error", () => {
+      stream.on("error", (streamErr) => {
         cleanup();
-        if (!res.headersSent) res.status(500).end();
+        console.error(`erro ao ler ${filePath}:`, streamErr);
+        if (!res.headersSent) {
+          res.status(500).json({ error: `erro ao ler arquivo gerado: ${streamErr.message}` });
+        }
       });
     } catch (err) {
       await cleanup();
-      console.error(err);
-      if (!res.headersSent) res.status(500).json({ error: "erro interno" });
+      console.error("erro inesperado pós-conversão:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: `erro interno após conversão: ${err.message}` });
+      }
     }
   });
 
   child.on("error", async (err) => {
     clearTimeout(killTimer);
     await cleanup();
-    console.error("erro ao iniciar yt-dlp:", err);
-    if (!res.headersSent) res.status(500).json({ error: "erro interno" });
+    console.error(`erro ao iniciar yt-dlp (url=${url}):`, err);
+    if (!res.headersSent) {
+      const hint =
+        err.code === "ENOENT"
+          ? "binário yt-dlp não encontrado no PATH do container"
+          : err.message;
+      res.status(500).json({ error: `erro ao iniciar yt-dlp: ${hint}` });
+    }
   });
 });
 
