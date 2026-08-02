@@ -40,10 +40,14 @@ export async function POST(request: Request) {
   }
 
   if (!workerRes.ok || !workerRes.body) {
-    const message = await workerRes.text().catch(() => "falha ao converter");
-    return Response.json({ error: message || "falha ao converter" }, {
-      status: workerRes.status || 502,
-    });
+    let message = "falha ao converter";
+    try {
+      const data = await workerRes.json();
+      if (typeof data?.error === "string") message = data.error;
+    } catch {
+      // resposta do worker não era JSON, mantém a mensagem padrão
+    }
+    return Response.json({ error: message }, { status: workerRes.status || 502 });
   }
 
   return new Response(workerRes.body, {
