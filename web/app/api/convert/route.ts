@@ -17,6 +17,9 @@ export async function POST(request: Request) {
     );
   }
 
+  // remove barra(s) final(is) pra não gerar "//convert" se a env var vier com trailing slash
+  const workerBase = workerUrl.replace(/\/+$/, "");
+
   let url: unknown;
   try {
     ({ url } = await request.json());
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
 
   let workerRes: Response;
   try {
-    workerRes = await fetch(`${workerUrl}/convert`, {
+    workerRes = await fetch(`${workerBase}/convert`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -47,14 +50,14 @@ export async function POST(request: Request) {
     const elapsedMs = Date.now() - startedAt;
     const isAbort = err instanceof Error && err.name === "AbortError";
     console.error(
-      `[convert] falha ao chamar worker (${workerUrl}) após ${elapsedMs}ms:`,
+      `[convert] falha ao chamar worker (${workerBase}) após ${elapsedMs}ms:`,
       err
     );
     return Response.json(
       {
         error: isAbort
           ? `worker não respondeu em ${WORKER_FETCH_TIMEOUT_MS / 1000}s (possível cold start do Render ou vídeo muito longo) — tente de novo`
-          : `worker indisponível (${workerUrl}): ${err instanceof Error ? err.message : String(err)}`,
+          : `worker indisponível (${workerBase}): ${err instanceof Error ? err.message : String(err)}`,
       },
       { status: 502 }
     );
