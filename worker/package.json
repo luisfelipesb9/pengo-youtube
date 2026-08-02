@@ -1,0 +1,14 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "Converte links do YouTube em MP3 via yt-dlp + ffmpeg",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
