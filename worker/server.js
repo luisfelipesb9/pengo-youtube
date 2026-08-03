@@ -13,6 +13,24 @@ const YT_DLP_TIMEOUT_MS = 120_000;
 const YOUTUBE_URL_RE =
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/i;
 
+// Fallback para quando o YouTube bloqueia o IP do worker com "Sign in to
+// confirm you're not a bot": cole o conteúdo de um cookies.txt (formato
+// Netscape) codificado em base64 na env var YT_DLP_COOKIES_B64.
+const COOKIES_PATH = path.join(os.tmpdir(), "yt-dlp-cookies.txt");
+let cookiesReady = false;
+if (process.env.YT_DLP_COOKIES_B64) {
+  try {
+    fsSync.writeFileSync(
+      COOKIES_PATH,
+      Buffer.from(process.env.YT_DLP_COOKIES_B64, "base64")
+    );
+    cookiesReady = true;
+    console.log("cookies do YouTube carregados a partir de YT_DLP_COOKIES_B64");
+  } catch (err) {
+    console.error("falha ao decodificar YT_DLP_COOKIES_B64:", err);
+  }
+}
+
 const app = express();
 app.use(express.json());
 
@@ -45,8 +63,8 @@ app.post("/convert", async (req, res) => {
     url,
   ];
 
-  if (process.env.YT_DLP_COOKIES_PATH) {
-    args.push("--cookies", process.env.YT_DLP_COOKIES_PATH);
+  if (cookiesReady) {
+    args.push("--cookies", COOKIES_PATH);
   }
 
   const child = spawn("yt-dlp", args);
@@ -82,8 +100,12 @@ app.post("/convert", async (req, res) => {
         ? `timeout de ${YT_DLP_TIMEOUT_MS / 1000}s excedido`
         : `código de saída ${code}${signal ? ` (sinal ${signal})` : ""}`;
       console.error(`yt-dlp falhou [${reason}] url=${url}\n${stderr.slice(-2000)}`);
+      const botHint =
+        !cookiesReady && /sign in to confirm/i.test(stderr)
+          ? " — configure a env var YT_DLP_COOKIES_B64 no worker pra contornar esse bloqueio"
+          : "";
       return res.status(502).json({
-        error: `yt-dlp falhou (${reason})${lastLines ? `: ${lastLines}` : ""}`,
+        error: `yt-dlp falhou (${reason})${lastLines ? `: ${lastLines}` : ""}${botHint}`,
       });
     }
 

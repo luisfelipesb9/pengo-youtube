@@ -68,12 +68,28 @@ Suba o worker primeiro, para já ter a URL pronta ao configurar a Vercel.
 
 O worker já usa `--extractor-args "youtube:player_client=android"`, que
 resolve a maioria dos bloqueios. Se ainda assim aparecer erro de "Sign in to
-confirm you're not a bot":
+confirm you're not a bot", o worker já suporta passar cookies pro yt-dlp —
+falta só configurar:
 
-1. Exporte os cookies de uma sessão logada do YouTube (extensão tipo "Get
-   cookies.txt") para um arquivo `cookies.txt`.
-2. No Render, monte esse conteúdo como env var (ex. base64) e escreva pra um
-   arquivo no boot do container.
-3. Aponte `YT_DLP_COOKIES_PATH` pro caminho desse arquivo.
+1. Instale uma extensão de exportar cookies no navegador (ex. "Get
+   cookies.txt LOCALLY", disponível pra Chrome e Firefox).
+2. Faça login em youtube.com com uma conta Google — **de preferência uma
+   conta secundária/descartável**, já que esses cookies dão acesso à sessão
+   logada dessa conta enquanto forem válidos.
+3. Com a extensão, exporte os cookies do domínio `youtube.com` em formato
+   Netscape → salve como `cookies.txt`.
+4. Converta o arquivo pra base64 numa linha só:
+   ```bash
+   base64 -i cookies.txt | tr -d '\n' | pbcopy   # macOS, já copia pro clipboard
+   # ou, no Linux:
+   base64 -w0 cookies.txt
+   ```
+5. No Render → seu serviço → **Environment** → adicione a env var
+   `YT_DLP_COOKIES_B64` com esse valor colado.
+6. Salve — o Render reinicia o serviço automaticamente e o worker passa a
+   usar os cookies em toda conversão.
 
-Não implementado por padrão — só necessário se o bloqueio acontecer de fato.
+Cookies de sessão expiram; se o bloqueio voltar depois de um tempo, repita o
+processo. Não é necessário fazer isso de cara — só quando o bloqueio
+acontecer de fato (o erro na tela vai indicar explicitamente quando for o
+caso).
