@@ -334,17 +334,24 @@ export default function SetupPage() {
                 </p>
               )}
               {verifyResult && (
-                <p
-                  className={`text-sm font-semibold ${
+                <div
+                  className={`flex flex-col gap-1 text-sm font-semibold ${
                     verifyResult.valid
                       ? "text-green-600 dark:text-green-400"
                       : "text-amber-600 dark:text-amber-400"
                   }`}
                 >
-                  {verifyResult.valid
-                    ? "Cookies válidos — está funcionando!"
-                    : "Cookies não funcionaram (expiraram ou o bloqueio continua) — repita os passos acima com um login novo."}
-                </p>
+                  <p>
+                    {verifyResult.valid
+                      ? "Cookies válidos — está funcionando!"
+                      : "Cookies não funcionaram (expiraram ou o bloqueio continua) — repita os passos acima com um login novo."}
+                  </p>
+                  {!verifyResult.valid && verifyResult.detail && (
+                    <p className="font-mono text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                      Detalhe técnico: {verifyResult.detail}
+                    </p>
+                  )}
+                </div>
               )}
             </section>
           </>

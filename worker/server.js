@@ -184,6 +184,7 @@ app.post("/admin/cookies/verify", async (req, res) => {
     }
 
     const blocked = /sign in to confirm/i.test(stderr);
+    console.error(`/admin/cookies/verify falhou [${blocked ? "expired_or_blocked" : "unknown_error"}]:\n${stderr.slice(-2000)}`);
     res.json({
       ok: true,
       valid: false,
