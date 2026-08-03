@@ -15,6 +15,14 @@ const TEST_VIDEO_URL = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
 const YOUTUBE_URL_RE =
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/i;
 
+// Ordem de clientes do yt-dlp pro extractor do YouTube: web_embedded e tv não
+// exigem "PO Token" (mecanismo de bloqueio do YouTube pra IPs de datacenter,
+// separado tanto de cookies quanto do desafio "n"); android_vr fica só como
+// último fallback, já que costuma ser o alvo do bloqueio 403 em IPs como o
+// do Render. Isso não é garantia — o próprio yt-dlp documenta que IPs de
+// datacenter continuam mais sujeitos a bloqueio mesmo com PO Token.
+const PLAYER_CLIENTS = "web_embedded,tv,android_vr";
+
 // Cookies do YouTube: usados quando o IP do worker é bloqueado com
 // "Sign in to confirm you're not a bot". Duas formas de configurar:
 // - no boot, via env var YT_DLP_COOKIES_B64 (base64 de um cookies.txt)
@@ -156,10 +164,6 @@ app.post("/admin/cookies/verify", async (req, res) => {
     return res.status(400).json({ error: "nenhum cookie configurado ainda" });
   }
 
-  // sem --extractor-args player_client=android aqui: esse cliente não suporta
-  // cookies (o yt-dlp simplesmente o ignora quando --cookies é passado), então
-  // forçá-lo faria a checagem cair num cliente inconsistente com o que o
-  // /convert realmente vai usar
   const child = spawn("yt-dlp", [
     "--cookies",
     COOKIES_PATH,
@@ -168,6 +172,8 @@ app.post("/admin/cookies/verify", async (req, res) => {
     // vem desligado por padrão por segurança.
     "--remote-components",
     "ejs:github",
+    "--extractor-args",
+    `youtube:player_client=${PLAYER_CLIENTS}`,
     "--simulate",
     "--skip-download",
     TEST_VIDEO_URL,
@@ -227,21 +233,19 @@ app.post("/convert", async (req, res) => {
     // ver comentário equivalente em /admin/cookies/verify
     "--remote-components",
     "ejs:github",
+    "--extractor-args",
+    `youtube:player_client=${PLAYER_CLIENTS}`,
     "-o",
     path.join(tmpDir, "%(title)s.%(ext)s"),
     url,
   ];
 
   if (cookiesReady) {
-    // cliente "android" não suporta cookies (yt-dlp ignora --extractor-args
-    // player_client=android quando --cookies é passado) — com cookies
-    // configurados, deixa o yt-dlp escolher o cliente padrão, que já lida
-    // com cookies corretamente.
     args.push("--cookies", COOKIES_PATH);
   } else {
-    // sem cookies, forçar o cliente android reduz bastante o bloqueio de
-    // bot-detection do YouTube em IPs de datacenter.
-    args.push("--extractor-args", "youtube:player_client=android");
+    // nenhum cookie configurado ainda — segue só com os clientes que não
+    // dependem de login (web_embedded/tv/android_vr, em PLAYER_CLIENTS acima).
+    // Quando o bloqueio aparecer, o /setup orienta configurar cookies.
   }
 
   const child = spawn("yt-dlp", args);
