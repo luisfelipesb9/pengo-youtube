@@ -74,6 +74,14 @@ resolve a maioria dos bloqueios. Se ainda assim aparecer erro de "Sign in to
 confirm you're not a bot", a própria tela mostra um botão **"Configurar
 cookies →"** apontando pra página `/setup`.
 
+> Nem todo erro de conversão é bot-detection. Desde a versão 2025.11.12 o
+> yt-dlp exige um runtime JS externo (Deno, já instalado no `Dockerfile`)
+> pra resolver o desafio "n" do YouTube — sem isso, a extração falha com "n
+> challenge solving failed" mesmo com cookies válidos, e isso não tem nada a
+> ver com cookies/autenticação. Se esse erro voltar a aparecer no futuro
+> (ex: yt-dlp atualizou e mudou de novo), o `/status` na página `/setup`
+> mostra a versão do yt-dlp instalada como primeiro ponto de checagem.
+
 ### Caminho principal: página `/setup` (não precisa terminal nem Render)
 
 1. Acesse `<sua-url-da-vercel>/setup` e entre com a `SETUP_PASSPHRASE`.
