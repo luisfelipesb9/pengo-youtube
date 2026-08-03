@@ -117,3 +117,8 @@ quer uma configuração mais durável, veja a opção abaixo.
 Cookies de sessão expiram; se o bloqueio voltar depois de um tempo, repita o
 processo (por qualquer uma das duas vias). Não é necessário fazer isso de
 cara — só quando o bloqueio acontecer de fato.
+
+**Quanto tempo os cookies duram?** Não há prazo fixo — na prática costuma
+ser de alguns dias a algumas semanas, dependendo de quando o YouTube decide
+desconfiar da sessão. A própria página `/setup` já deixa esse aviso visível
+pra quem for configurar.

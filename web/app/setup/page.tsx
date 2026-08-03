@@ -285,6 +285,16 @@ export default function SetupPage() {
                 </li>
               </ol>
 
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <span className="font-bold">De quanto em quanto tempo repetir isso?</span> Não tem
+                uma data fixa — na prática costuma durar de{" "}
+                <span className="font-semibold">alguns dias a algumas semanas</span>. Quando o
+                bloqueio voltar (a tela principal vai mostrar erro de novo, com o botão{" "}
+                <span className="font-semibold">&quot;Configurar cookies&quot;</span>), é só voltar
+                aqui e repetir os passos 1 a 4 com um login novo. Não precisa fazer isso antes
+                disso acontecer.
+              </div>
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -350,6 +360,14 @@ export default function SetupPage() {
                     <p className="font-mono text-xs font-normal text-zinc-500 dark:text-zinc-400">
                       Detalhe técnico: {verifyResult.detail}
                     </p>
+                  )}
+                  {verifyResult.valid && (
+                    <Link
+                      href="/"
+                      className="mt-1 self-start rounded-full bg-zinc-950 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                    >
+                      Tudo certo! Ir converter vídeos →
+                    </Link>
                   )}
                 </div>
               )}

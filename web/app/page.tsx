@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import pLimit from "p-limit";
+import { ConversionProgressRings } from "@/components/ConversionProgressRings";
 
 const YOUTUBE_URL_RE =
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/i;
@@ -146,6 +147,16 @@ export default function Home() {
             Converter
           </button>
         </form>
+
+        {items.length > 0 && (
+          <ConversionProgressRings
+            total={items.length}
+            done={items.filter((i) => i.status === "done").length}
+            converting={items.filter((i) => i.status === "converting").length}
+            pending={items.filter((i) => i.status === "pending").length}
+            errors={items.filter((i) => i.status === "error").length}
+          />
+        )}
 
         {items.length > 0 && (
           <ul className="flex flex-col gap-3">
