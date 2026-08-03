@@ -69,6 +69,7 @@ export function ConversionProgressRings({
   converting,
   pending,
   errors,
+  overallPct,
   className,
 }: {
   total: number;
@@ -76,6 +77,7 @@ export function ConversionProgressRings({
   converting: number;
   pending: number;
   errors: number;
+  overallPct: number;
   className?: string;
 }) {
   if (total === 0) return null;
@@ -122,6 +124,12 @@ export function ConversionProgressRings({
         {rings.map((ring) => (
           <Ring data={ring} key={ring.label} />
         ))}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-extrabold text-2xl text-zinc-900 dark:text-zinc-50">
+            {overallPct}
+            <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">%</span>
+          </span>
+        </div>
       </div>
       <div className="flex flex-col gap-3">
         {rings.map((ring) => (
