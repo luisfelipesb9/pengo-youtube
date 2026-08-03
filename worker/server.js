@@ -163,6 +163,11 @@ app.post("/admin/cookies/verify", async (req, res) => {
   const child = spawn("yt-dlp", [
     "--cookies",
     COOKIES_PATH,
+    // desde a versão 2025.11.12, o yt-dlp precisa buscar (uma vez, com
+    // cache local) o solver do desafio "n" do YouTube pra rodar via Deno —
+    // vem desligado por padrão por segurança.
+    "--remote-components",
+    "ejs:github",
     "--simulate",
     "--skip-download",
     TEST_VIDEO_URL,
@@ -219,6 +224,9 @@ app.post("/convert", async (req, res) => {
     "--audio-format",
     "mp3",
     "--no-playlist",
+    // ver comentário equivalente em /admin/cookies/verify
+    "--remote-components",
+    "ejs:github",
     "-o",
     path.join(tmpDir, "%(title)s.%(ext)s"),
     url,
