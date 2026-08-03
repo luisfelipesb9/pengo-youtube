@@ -34,7 +34,8 @@ Requer `yt-dlp` e `ffmpeg` instalados no PATH (`brew install yt-dlp ffmpeg` no m
 cd web
 npm install
 cp .env.example .env.local
-# preencha WORKER_URL=http://localhost:8787 e WORKER_API_KEY com o mesmo valor do worker
+# preencha WORKER_URL=http://localhost:8787, WORKER_API_KEY com o mesmo valor
+# do worker, e SETUP_PASSPHRASE com uma senha qualquer (protege a página /setup)
 npm run dev
 ```
 
@@ -59,7 +60,9 @@ Abra http://localhost:3000.
 1. Import do repositório no dashboard da Vercel.
 2. Root Directory: `web`.
 3. Framework preset: Next.js (auto-detectado).
-4. Env vars: `WORKER_URL` (URL do Render) e `WORKER_API_KEY` (mesmo valor do worker).
+4. Env vars: `WORKER_URL` (URL do Render), `WORKER_API_KEY` (mesmo valor do
+   worker) e `SETUP_PASSPHRASE` (senha que você vai compartilhar com quem for
+   usar a página `/setup` — pode ser qualquer coisa, é só um filtro simples).
 5. Deploy.
 
 Suba o worker primeiro, para já ter a URL pronta ao configurar a Vercel.
@@ -68,28 +71,41 @@ Suba o worker primeiro, para já ter a URL pronta ao configurar a Vercel.
 
 O worker já usa `--extractor-args "youtube:player_client=android"`, que
 resolve a maioria dos bloqueios. Se ainda assim aparecer erro de "Sign in to
-confirm you're not a bot", o worker já suporta passar cookies pro yt-dlp —
-falta só configurar:
+confirm you're not a bot", a própria tela mostra um botão **"Configurar
+cookies →"** apontando pra página `/setup`.
 
-1. Instale uma extensão de exportar cookies no navegador (ex. "Get
-   cookies.txt LOCALLY", disponível pra Chrome e Firefox).
-2. Faça login em youtube.com com uma conta Google — **de preferência uma
-   conta secundária/descartável**, já que esses cookies dão acesso à sessão
-   logada dessa conta enquanto forem válidos.
-3. Com a extensão, exporte os cookies do domínio `youtube.com` em formato
-   Netscape → salve como `cookies.txt`.
-4. Converta o arquivo pra base64 numa linha só:
+### Caminho principal: página `/setup` (não precisa terminal nem Render)
+
+1. Acesse `<sua-url-da-vercel>/setup` e entre com a `SETUP_PASSPHRASE`.
+2. Siga o passo a passo na tela: instalar a extensão "Get cookies.txt
+   LOCALLY", logar no YouTube (de preferência com uma conta
+   secundária/descartável, já que os cookies dão acesso à sessão logada
+   dela) e exportar o `cookies.txt` do domínio `youtube.com`.
+3. Escolha o arquivo (ou cole o conteúdo) na página e clique em **"Salvar
+   cookies"**.
+4. Clique em **"Testar agora"** pra confirmar que funcionou de verdade (a
+   página roda uma checagem real, não só confere se o arquivo existe).
+
+Essa via grava os cookies em runtime — funciona até o container do Render
+reiniciar (o plano free dorme após inatividade; quando isso acontecer, é só
+repetir esse passo na página). Pra quem tem acesso ao dashboard da Render e
+quer uma configuração mais durável, veja a opção abaixo.
+
+### Alternativa durável: env var no Render (sobrevive a restarts)
+
+1. Exporte o `cookies.txt` como no passo 2 acima.
+2. Converta o arquivo pra base64 numa linha só:
    ```bash
    base64 -i cookies.txt | tr -d '\n' | pbcopy   # macOS, já copia pro clipboard
    # ou, no Linux:
    base64 -w0 cookies.txt
    ```
-5. No Render → seu serviço → **Environment** → adicione a env var
+3. No Render → seu serviço → **Environment** → adicione a env var
    `YT_DLP_COOKIES_B64` com esse valor colado.
-6. Salve — o Render reinicia o serviço automaticamente e o worker passa a
-   usar os cookies em toda conversão.
+4. Salve — o Render reinicia o serviço automaticamente e o worker passa a
+   usar os cookies em toda conversão (a página `/setup` mostra
+   `cookies configurados (fixo)` quando vêm daqui).
 
 Cookies de sessão expiram; se o bloqueio voltar depois de um tempo, repita o
-processo. Não é necessário fazer isso de cara — só quando o bloqueio
-acontecer de fato (o erro na tela vai indicar explicitamente quando for o
-caso).
+processo (por qualquer uma das duas vias). Não é necessário fazer isso de
+cara — só quando o bloqueio acontecer de fato.

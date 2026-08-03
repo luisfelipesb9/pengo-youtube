@@ -1,5 +1,5 @@
 const express = require("express");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const fs = require("fs/promises");
 const fsSync = require("fs");
 const os = require("os");
@@ -9,37 +9,179 @@ const crypto = require("crypto");
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.WORKER_API_KEY;
 const YT_DLP_TIMEOUT_MS = 120_000;
+const VERIFY_TIMEOUT_MS = 30_000;
+const TEST_VIDEO_URL = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
 
 const YOUTUBE_URL_RE =
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[\w-]+/i;
 
-// Fallback para quando o YouTube bloqueia o IP do worker com "Sign in to
-// confirm you're not a bot": cole o conteúdo de um cookies.txt (formato
-// Netscape) codificado em base64 na env var YT_DLP_COOKIES_B64.
+// Cookies do YouTube: usados quando o IP do worker é bloqueado com
+// "Sign in to confirm you're not a bot". Duas formas de configurar:
+// - no boot, via env var YT_DLP_COOKIES_B64 (base64 de um cookies.txt)
+// - em runtime, via POST /admin/cookies (usado pela página /setup)
+// Ambas escrevem no mesmo COOKIES_PATH.
 const COOKIES_PATH = path.join(os.tmpdir(), "yt-dlp-cookies.txt");
 let cookiesReady = false;
+let cookiesSource = null; // "env" | "runtime" | null
+
+function looksLikeNetscapeCookies(text) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+  if (lines.length === 0) return false;
+  const tabbed = lines.filter((l) => l.split("\t").length === 7);
+  if (tabbed.length / lines.length < 0.8) return false;
+  return /youtube\.com|google\.com/i.test(text);
+}
+
+function writeCookiesFile(text, source) {
+  const tmpPath = `${COOKIES_PATH}.tmp`;
+  fsSync.writeFileSync(tmpPath, text, "utf8");
+  fsSync.renameSync(tmpPath, COOKIES_PATH);
+  cookiesReady = true;
+  cookiesSource = source;
+}
+
 if (process.env.YT_DLP_COOKIES_B64) {
   try {
-    fsSync.writeFileSync(
-      COOKIES_PATH,
-      Buffer.from(process.env.YT_DLP_COOKIES_B64, "base64")
-    );
-    cookiesReady = true;
+    const text = Buffer.from(process.env.YT_DLP_COOKIES_B64, "base64").toString("utf8");
+    writeCookiesFile(text, "env");
     console.log("cookies do YouTube carregados a partir de YT_DLP_COOKIES_B64");
   } catch (err) {
     console.error("falha ao decodificar YT_DLP_COOKIES_B64:", err);
   }
 }
 
+function getVersion(cmd, args) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, (err, stdout) => {
+      if (err) return resolve(null);
+      resolve(stdout.toString().trim().split("\n")[0]);
+    });
+  });
+}
+
+let cachedYtDlpVersion; // undefined = ainda não checou, null = não instalado
+let cachedFfmpegVersion;
+
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "2mb" })); // cookies.txt pode passar de 100kb em contas com muitos cookies
+
+function requireApiKey(req, res) {
+  if (!API_KEY || req.headers["x-api-key"] !== API_KEY) {
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
 
 app.get("/health", (_req, res) => res.status(200).send("ok"));
 
-app.post("/convert", async (req, res) => {
-  if (!API_KEY || req.headers["x-api-key"] !== API_KEY) {
-    return res.status(401).json({ error: "unauthorized" });
+app.get("/status", async (req, res) => {
+  if (!requireApiKey(req, res)) return;
+
+  if (cachedYtDlpVersion === undefined) {
+    cachedYtDlpVersion = await getVersion("yt-dlp", ["--version"]);
   }
+  if (cachedFfmpegVersion === undefined) {
+    cachedFfmpegVersion = await getVersion("ffmpeg", ["-version"]);
+  }
+
+  let tmpWritable = true;
+  try {
+    const probe = path.join(os.tmpdir(), `.probe-${crypto.randomUUID()}`);
+    fsSync.writeFileSync(probe, "x");
+    fsSync.unlinkSync(probe);
+  } catch {
+    tmpWritable = false;
+  }
+
+  res.json({
+    ok: true,
+    ytdlp: { installed: cachedYtDlpVersion !== null, version: cachedYtDlpVersion },
+    ffmpeg: { installed: cachedFfmpegVersion !== null, version: cachedFfmpegVersion },
+    cookies: { configured: cookiesReady, source: cookiesSource },
+    tmpdir: { writable: tmpWritable },
+    uptimeSec: Math.round(process.uptime()),
+  });
+});
+
+app.post("/admin/cookies", (req, res) => {
+  if (!requireApiKey(req, res)) return;
+
+  const { cookiesText } = req.body ?? {};
+  if (typeof cookiesText !== "string" || !cookiesText.trim()) {
+    return res.status(400).json({ error: "cookiesText vazio ou ausente" });
+  }
+  if (!looksLikeNetscapeCookies(cookiesText)) {
+    return res.status(400).json({
+      error:
+        "isso não parece um cookies.txt válido (formato Netscape, exportado do domínio youtube.com) — confira se exportou o arquivo certo",
+    });
+  }
+
+  try {
+    writeCookiesFile(cookiesText, "runtime");
+    console.log("cookies do YouTube atualizados via /admin/cookies (runtime)");
+    res.json({ ok: true, cookiesConfigured: true });
+  } catch (err) {
+    console.error("falha ao gravar cookies via /admin/cookies:", err);
+    res.status(500).json({ error: `falha ao salvar cookies: ${err.message}` });
+  }
+});
+
+app.post("/admin/cookies/verify", async (req, res) => {
+  if (!requireApiKey(req, res)) return;
+
+  if (!cookiesReady) {
+    return res.status(400).json({ error: "nenhum cookie configurado ainda" });
+  }
+
+  const child = spawn("yt-dlp", [
+    "--cookies",
+    COOKIES_PATH,
+    "--simulate",
+    "--skip-download",
+    "--extractor-args",
+    "youtube:player_client=android",
+    TEST_VIDEO_URL,
+  ]);
+
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const killTimer = setTimeout(() => child.kill("SIGKILL"), VERIFY_TIMEOUT_MS);
+
+  child.on("close", (code) => {
+    clearTimeout(killTimer);
+    if (res.headersSent) return;
+
+    if (code === 0) {
+      return res.json({ ok: true, valid: true });
+    }
+
+    const blocked = /sign in to confirm/i.test(stderr);
+    res.json({
+      ok: true,
+      valid: false,
+      reason: blocked ? "expired_or_blocked" : "unknown_error",
+      detail: stderr.trim().split("\n").filter(Boolean).slice(-3).join(" | ").slice(0, 300),
+    });
+  });
+
+  child.on("error", (err) => {
+    clearTimeout(killTimer);
+    if (!res.headersSent) {
+      res.status(500).json({ error: `erro ao rodar verificação: ${err.message}` });
+    }
+  });
+});
+
+app.post("/convert", async (req, res) => {
+  if (!requireApiKey(req, res)) return;
 
   const { url } = req.body ?? {};
   if (typeof url !== "string" || !YOUTUBE_URL_RE.test(url)) {
@@ -100,10 +242,12 @@ app.post("/convert", async (req, res) => {
         ? `timeout de ${YT_DLP_TIMEOUT_MS / 1000}s excedido`
         : `código de saída ${code}${signal ? ` (sinal ${signal})` : ""}`;
       console.error(`yt-dlp falhou [${reason}] url=${url}\n${stderr.slice(-2000)}`);
-      const botHint =
-        !cookiesReady && /sign in to confirm/i.test(stderr)
-          ? " — configure a env var YT_DLP_COOKIES_B64 no worker pra contornar esse bloqueio"
-          : "";
+      const botBlocked = /sign in to confirm/i.test(stderr);
+      const botHint = botBlocked
+        ? cookiesReady
+          ? " — os cookies configurados parecem ter expirado, atualize em /setup"
+          : " — nenhum cookie configurado ainda, configure em /setup"
+        : "";
       return res.status(502).json({
         error: `yt-dlp falhou (${reason})${lastLines ? `: ${lastLines}` : ""}${botHint}`,
       });

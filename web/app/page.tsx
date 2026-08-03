@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import pLimit from "p-limit";
 
 const YOUTUBE_URL_RE =
@@ -195,9 +196,19 @@ function StatusLabel({ item }: { item: Item }) {
       );
     case "error":
       return (
-        <p className="text-xs font-semibold text-red-600 dark:text-red-400">
-          Erro: {item.error}
-        </p>
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+            Erro: {item.error}
+          </p>
+          {item.error?.includes("/setup") && (
+            <Link
+              href="/setup"
+              className="text-xs font-bold text-zinc-900 underline dark:text-zinc-100"
+            >
+              Configurar cookies →
+            </Link>
+          )}
+        </div>
       );
   }
 }
