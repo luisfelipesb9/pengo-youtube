@@ -266,11 +266,18 @@ export default function SetupPage() {
                   >
                     youtube.com
                   </a>{" "}
-                  e faça login (de preferência com uma conta que não seja a sua principal).
+                  numa aba nova e faça login (de preferência com uma conta que não seja a sua
+                  principal).
                 </li>
                 <li>
-                  <span className="font-bold">3.</span> Clique no ícone da extensão, exporte os
-                  cookies e baixe o arquivo <span className="font-semibold">cookies.txt</span>.
+                  <span className="font-bold">3.</span> Importante:{" "}
+                  <span className="font-semibold">
+                    fique nessa aba do YouTube (ela precisa estar em foco/selecionada)
+                  </span>{" "}
+                  e só então clique no ícone da extensão e exporte os cookies, baixando o arquivo{" "}
+                  <span className="font-semibold">cookies.txt</span>. Se você clicar na extensão
+                  estando em outra aba (ex: a da loja de extensões), ela vai exportar os cookies
+                  da aba errada e não vai funcionar.
                 </li>
                 <li>
                   <span className="font-bold">4.</span> Escolha esse arquivo abaixo (ou cole o

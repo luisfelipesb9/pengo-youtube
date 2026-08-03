@@ -24,15 +24,27 @@ const COOKIES_PATH = path.join(os.tmpdir(), "yt-dlp-cookies.txt");
 let cookiesReady = false;
 let cookiesSource = null; // "env" | "runtime" | null
 
-function looksLikeNetscapeCookies(text) {
-  const lines = text
+function parseCookieRows(text) {
+  return text
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#"));
-  if (lines.length === 0) return false;
-  const tabbed = lines.filter((l) => l.split("\t").length === 7);
-  if (tabbed.length / lines.length < 0.8) return false;
-  return /youtube\.com|google\.com/i.test(text);
+    .filter((l) => l && !l.startsWith("#"))
+    .map((l) => l.split("\t"));
+}
+
+function looksLikeNetscapeFormat(text) {
+  const rows = parseCookieRows(text);
+  if (rows.length === 0) return false;
+  const wellFormed = rows.filter((r) => r.length === 7);
+  return wellFormed.length / rows.length >= 0.8;
+}
+
+function hasYoutubeCookies(text) {
+  // campo 0 de cada linha é o domínio do cookie — precisa ter pelo menos
+  // um cookie cujo domínio seja (sub.)youtube.com, não só "menciona" a
+  // string em algum lugar (isso deixava passar cookies só do
+  // chromewebstore.google.com, por exemplo).
+  return parseCookieRows(text).some((r) => /(^|\.)youtube\.com$/i.test(r[0] ?? ""));
 }
 
 function writeCookiesFile(text, source) {
@@ -114,10 +126,16 @@ app.post("/admin/cookies", (req, res) => {
   if (typeof cookiesText !== "string" || !cookiesText.trim()) {
     return res.status(400).json({ error: "cookiesText vazio ou ausente" });
   }
-  if (!looksLikeNetscapeCookies(cookiesText)) {
+  if (!looksLikeNetscapeFormat(cookiesText)) {
     return res.status(400).json({
       error:
-        "isso não parece um cookies.txt válido (formato Netscape, exportado do domínio youtube.com) — confira se exportou o arquivo certo",
+        "isso não parece um cookies.txt válido (formato Netscape) — confira se escolheu o arquivo certo",
+    });
+  }
+  if (!hasYoutubeCookies(cookiesText)) {
+    return res.status(400).json({
+      error:
+        "esse arquivo não tem nenhum cookie do youtube.com — parece que a aba ativa era outra (ex: a loja de extensões) quando você exportou. Abra o youtube.com, deixe ESSA aba em foco, clique no ícone da extensão de novo e exporte a partir dela",
     });
   }
 
