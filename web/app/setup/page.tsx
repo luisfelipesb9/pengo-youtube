@@ -247,7 +247,7 @@ export default function SetupPage() {
                 <li>
                   <span className="font-bold">1.</span> Instale a extensão{" "}
                   <a
-                    href="https://chromewebstore.google.com/search/Get%20cookies.txt%20LOCALLY"
+                    href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-semibold underline"

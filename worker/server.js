@@ -138,13 +138,15 @@ app.post("/admin/cookies/verify", async (req, res) => {
     return res.status(400).json({ error: "nenhum cookie configurado ainda" });
   }
 
+  // sem --extractor-args player_client=android aqui: esse cliente não suporta
+  // cookies (o yt-dlp simplesmente o ignora quando --cookies é passado), então
+  // forçá-lo faria a checagem cair num cliente inconsistente com o que o
+  // /convert realmente vai usar
   const child = spawn("yt-dlp", [
     "--cookies",
     COOKIES_PATH,
     "--simulate",
     "--skip-download",
-    "--extractor-args",
-    "youtube:player_client=android",
     TEST_VIDEO_URL,
   ]);
 
@@ -198,15 +200,21 @@ app.post("/convert", async (req, res) => {
     "--audio-format",
     "mp3",
     "--no-playlist",
-    "--extractor-args",
-    "youtube:player_client=android",
     "-o",
     path.join(tmpDir, "%(title)s.%(ext)s"),
     url,
   ];
 
   if (cookiesReady) {
+    // cliente "android" não suporta cookies (yt-dlp ignora --extractor-args
+    // player_client=android quando --cookies é passado) — com cookies
+    // configurados, deixa o yt-dlp escolher o cliente padrão, que já lida
+    // com cookies corretamente.
     args.push("--cookies", COOKIES_PATH);
+  } else {
+    // sem cookies, forçar o cliente android reduz bastante o bloqueio de
+    // bot-detection do YouTube em IPs de datacenter.
+    args.push("--extractor-args", "youtube:player_client=android");
   }
 
   const child = spawn("yt-dlp", args);
